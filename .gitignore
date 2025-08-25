@@ -13,7 +13,6 @@ node_modules
 
 # Prisma
 /prisma/dev.sqlite*
-/prisma/migrations
 
 # IDE
 .vscode/
