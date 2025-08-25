@@ -191,26 +191,16 @@ export default function MarkupConfigurationStep({
             operator: (c.field === 'price' || c.field === 'Variant Price' || c.field.toLowerCase().includes('price')) ? 'between' : c.operator // Auto-set between for price fields
           }))
       : [
-          // {
-          //   id: uid(),
-          //   field: "tags",
-          //   operator: "eq",
-          //   tagText: "Sandeep",
-          //   markupType: "percent",
-          //   percentagePreset: "10",
-          //   customPercent: "",
-          //   value: "10",
-          // },
-          // {
-          //   id: uid(),
-          //   field: "sku",
-          //   operator: "eq",
-          //   tagText: "18259",
-          //   markupType: "percent",
-          //   percentagePreset: "20",
-          //   customPercent: "",
-          //   value: "20",
-          // }
+          {
+            id: uid(),
+            field: "title",
+            operator: "eq",
+            tagText: "",
+            markupType: "percent",
+            percentagePreset: "10",
+            customPercent: "",
+            value: "10",
+          }
         ]
   );
 
@@ -222,6 +212,7 @@ export default function MarkupConfigurationStep({
         ...prev,
         [firstConditionId]: false // false means open
       }));
+      console.log('🔧 Setting first condition as open:', firstConditionId);
     }
   }, [rows.length]);
 
@@ -345,6 +336,7 @@ export default function MarkupConfigurationStep({
 
   function updateRow(id: string, key: keyof Row, value: string) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
+    console.log('🔧 Row updated:', { id, key, value });
   }
 
   function onChangePercentagePreset(id: string, preset: string) {
@@ -355,6 +347,7 @@ export default function MarkupConfigurationStep({
       }
       return { ...r, percentagePreset: preset, customPercent: "", value: preset };
     }));
+    console.log('🔧 Percentage preset changed:', { id, preset });
   }
 
   const previewText = useMemo(() => {
@@ -629,7 +622,10 @@ export default function MarkupConfigurationStep({
                       placeholder="Enter %"
                       type="number"
                       value={row.customPercent}
-                      onChange={(val) => updateRow(row.id, "customPercent", val)}
+                      onChange={(val) => {
+                        updateRow(row.id, "customPercent", val);
+                        updateRow(row.id, "value", val); // Also update value field
+                      }}
                       suffix="%"
                       autoComplete="off"
                       onFocus={(e) => {
@@ -747,7 +743,8 @@ export default function MarkupConfigurationStep({
                   </BlockStack>
                 </Box>
 
-                <InlineStack gap="300" blockAlign="center">
+                {/* OR Condition Selection - Hidden for single condition */}
+                {/* <InlineStack gap="300" blockAlign="center">
                   <Text as="span">Products must match:</Text>
                   <InlineStack gap="200" blockAlign="center" align="start">
                     <RadioButton
@@ -758,7 +755,7 @@ export default function MarkupConfigurationStep({
                       onChange={(checked) => checked && setMatchMode("any")}
                     />
                   </InlineStack>
-                </InlineStack>
+                </InlineStack> */}
 
                 {/* Explanation */}
                 <Box padding="300" background="bg-surface-secondary" borderRadius="300">
@@ -783,8 +780,8 @@ export default function MarkupConfigurationStep({
                     <div key={row.id}>
                       <ConditionCard row={row} />
                       
-                      {/* AND/OR connector between conditions */}
-                      {index < rows.length - 1 && (
+                      {/* AND/OR connector between conditions - Hidden for single condition */}
+                      {/* {index < rows.length - 1 && (
                         <InlineStack align="center" blockAlign="center" gap="300">
                           <div style={{ flex: 1 }}>
                             <Divider />
@@ -800,18 +797,18 @@ export default function MarkupConfigurationStep({
                             <Divider />
                           </div>
                         </InlineStack>
-                      )}
+                      )} */}
                     </div>
                   ))}
 
-                  {/* Add row button */}
-                  {canAddRow && (
+                  {/* Add row button - Hidden for single condition */}
+                  {/* {canAddRow && (
                     <div>
                       <Button icon={PlusIcon} onClick={addRow}>
                         Add another condition
                       </Button>
                     </div>
-                  )}
+                  )} */}
                 </BlockStack>
               </BlockStack>
             </Box>

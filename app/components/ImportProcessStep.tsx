@@ -304,7 +304,7 @@ export default function ImportProcessStep(props: ImportSummaryProps) {
 
                 <InlineStack gap="200"  >
                   <Button icon={PlayIcon} onClick={startImport}>Start Import</Button>
-                  <Button onClick={() => navigate('/app')} variant="secondary">Go to Dashboard</Button>
+                  <Button onClick={() => navigate('/app/connection-management')} variant="secondary">Go to Dashboard</Button>
                 </InlineStack>
               </Box> 
           </Layout.Section>
@@ -458,7 +458,7 @@ export default function ImportProcessStep(props: ImportSummaryProps) {
                             Successfully imported {success} products. {failed > 0 ? `${failed} products failed.` : ''}
                           </Text>
                         </div>
-                        <Button onClick={() => navigate('/app')} variant="primary">
+                        <Button onClick={() => navigate('/app/connection-management')} variant="primary">
                           Go to Dashboard
                         </Button>
                       </InlineStack>

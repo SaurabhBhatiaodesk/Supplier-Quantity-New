@@ -1,25 +1,27 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "76ffd6478baa6da15a8cc1055c5c4d64"
-name = "Deepak-Supplier-Quantity"
+name = "App-Supplier-Quantity"
 handle = "deepak-supplier-quantity"
-application_url = "https://gently-retention-retro-disable.trycloudflare.com"
+application_url = "https://snapshot-joseph-found-jump.trycloudflare.com"
 embedded = true
 
 [build]
-include_config_on_deploy = true
 automatically_update_urls_on_dev = true
+include_config_on_deploy = true
 
 [webhooks]
 api_version = "2025-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,read_inventory,write_inventory,read_locations,read_themes,write_themes,read_customers,write_customers,write_publications"
+scopes = "read_customers,read_inventory,read_locations,read_themes,write_customers,write_inventory,write_products,write_publications,write_themes"
 
- 
 [auth]
-redirect_urls = ["https://gently-retention-retro-disable.trycloudflare.com/auth/callback", "https://gently-retention-retro-disable.trycloudflare.com/auth/shopify/callback", "https://gently-retention-retro-disable.trycloudflare.com/api/auth/callback"]
+redirect_urls = ["https://snapshot-joseph-found-jump.trycloudflare.com/auth/callback", "https://snapshot-joseph-found-jump.trycloudflare.com/auth/shopify/callback", "https://snapshot-joseph-found-jump.trycloudflare.com/api/auth/callback"]
 
 [pos]
 embedded = false
+
+[app_preferences]
+url = "https://supplier-quantity-71088c98616f.herokuapp.com/"

@@ -641,9 +641,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               const productResp = await admin.graphql(createProductMutation, { variables: { input: productInput } });
               const productResult = await productResp.json();
               
-              if (productResult.data?.productCreate?.product) {
-                productId = productResult.data.productCreate.product.id;
-                console.log('Product created successfully:', productId);
+                              if (productResult.data?.productCreate?.product) {
+                  productId = productResult.data.productCreate.product.id;
+                  console.log('Product created successfully:', productId);
+                  
+                  // Add product options for variants
+
                 
                 // Step 1.5: Add images to product if available
                 if (productImages.length > 0) {
@@ -690,6 +693,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                 }
                 
                 // Step 2: Create variants using bulk mutation
+                console.log('🔧 Checking variants for product:', processedProduct.title);
+                console.log('🔧 processedProduct.variants:', JSON.stringify(processedProduct.variants, null, 2));
+                
                 if (processedProduct.variants && processedProduct.variants.length > 0) {
                   const createVariantsMutation = `#graphql
                     mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -703,34 +709,42 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                   // Note: Images are added separately, variants will inherit product images
                   
                   const variantInputs = processedProduct.variants.map((variant: any) => {
-                    const toMoneyString = (val: any): string | undefined => {
-                      if (val === null || val === undefined) return undefined;
+                    const toMoneyString = (val: any): string => {
+                      if (val === null || val === undefined) return '0.00';
                       const cleaned = String(val).trim();
-                      if (cleaned === '') return undefined;
+                      if (cleaned === '') return '0.00';
                       const num = parseFloat(cleaned.replace(/[^0-9.\-]/g, ''));
-                      if (Number.isNaN(num)) return undefined;
+                      if (Number.isNaN(num)) return '0.00';
                       return num.toFixed(2);
                     };
 
                     const variantInput: any = {
-                      price: toMoneyString(variant.price),
-                      compareAtPrice: toMoneyString(variant.compareAtPrice),
                       inventoryItem: {
                         sku: variant.sku || variant.supplier_sku_code || ''
-                      }
+                      },
+                      optionValues: [
+                        {
+                          optionName: "Title",
+                          name: processedProduct.title || "Default"
+                        }
+                      ]
                     };
 
-                    // Remove undefined values
-                    Object.keys(variantInput).forEach(key => {
-                      if (variantInput[key] === undefined) {
-                        delete variantInput[key];
-                      }
-                    });
+                    // Add price
+                    variantInput.price = toMoneyString(variant.price);
+                    console.log(`🔧 Variant price: original="${variant.price}" -> processed="${variantInput.price}"`);
+
+                    // Add compareAtPrice if available
+                    if (variant.compareAtPrice) {
+                      variantInput.compareAtPrice = toMoneyString(variant.compareAtPrice);
+                    }
 
                     return variantInput;
                   });
 
                   console.log('Creating variants:', variantInputs.length, 'variants');
+                  console.log('Variant inputs:', JSON.stringify(variantInputs, null, 2));
+                  
                   const variantsResp = await admin.graphql(createVariantsMutation, {
                     variables: {
                       productId: productId,
@@ -738,11 +752,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
                     }
                   });
                   const variantsResult = await variantsResp.json();
+                  
+                  console.log('Variant creation response:', JSON.stringify(variantsResult, null, 2));
 
                   if (variantsResult.data?.productVariantsBulkCreate?.productVariants) {
                     console.log('Variants created successfully:', variantsResult.data.productVariantsBulkCreate.productVariants.length, 'variants');
                   } else if (variantsResult.data?.productVariantsBulkCreate?.userErrors) {
                     console.error('Variant creation failed:', variantsResult.data.productVariantsBulkCreate.userErrors);
+                  } else {
+                    console.error('❌ Variant creation failed - no productVariants or userErrors in response');
                   }
                 }
 
@@ -1589,17 +1607,16 @@ function applyMarkupRules(product: any, markupConfig: any) {
   if (conditionsMatch) {
     console.log('🔧 Conditions match, applying markup');
     
-    // Apply markup from all matching conditions
-    let totalMarkupPercentage = 0;
-    let totalFixedMarkup = 0;
+    // Find the first matching condition and apply its markup only
+    let appliedMarkup = false;
     
     for (const condition of markupConfig.conditions) {
       const conditionMatches = checkCondition(product, condition);
-      if (conditionMatches) {
+      if (conditionMatches && !appliedMarkup) {
         const markupType = condition.markupType;
         const markupValue = parseFloat(condition.markupValue || condition.value || '0');
         
-        console.log(`🔧 Condition matches: ${condition.field || condition.attribute} ${condition.operator} "${condition.value}" - ${markupType} ${markupValue}`);
+        console.log(`🔧 Applying markup from condition: ${condition.field || condition.attribute} ${condition.operator} "${condition.value}" - ${markupType} ${markupValue}`);
         console.log(`🔧 Raw condition data:`, {
           markupType: condition.markupType,
           markupValue: condition.markupValue,
@@ -1607,48 +1624,37 @@ function applyMarkupRules(product: any, markupConfig: any) {
           parsedValue: markupValue
         });
         
-        if (markupType === 'percent' && markupValue > 0) {
-          totalMarkupPercentage += markupValue;
-          console.log(`🔧 Added ${markupValue}% to total percentage markup`);
-        } else if (markupType === 'percentage' && markupValue > 0) {
-          totalMarkupPercentage += markupValue;
-          console.log(`🔧 Added ${markupValue}% to total percentage markup (percentage type)`);
+        const currentPrice = parseFloat(product.variants?.[0]?.price || '0');
+        console.log(`🔧 Current price: $${currentPrice}`);
+        
+        let newPrice = currentPrice;
+        
+        // Apply markup based on type
+        if ((markupType === 'percent' || markupType === 'percentage') && markupValue > 0) {
+          newPrice = currentPrice * (1 + markupValue / 100);
+          console.log(`🔧 Applied ${markupValue}% markup: $${currentPrice} → $${newPrice.toFixed(2)}`);
         } else if (markupType === 'fixed' && markupValue > 0) {
-          totalFixedMarkup += markupValue;
-          console.log(`🔧 Added $${markupValue} to total fixed markup`);
+          newPrice = currentPrice + markupValue;
+          console.log(`🔧 Applied $${markupValue} fixed markup: $${currentPrice} → $${newPrice.toFixed(2)}`);
         } else {
           console.log(`🔧 Markup not applied: type=${markupType}, value=${markupValue}`);
+          continue;
+        }
+        
+        if (newPrice !== currentPrice) {
+          product.variants[0].price = newPrice.toFixed(2);
+          product.markupApplied = true;
+          product.markupType = (markupType === 'percent' || markupType === 'percentage') ? 'percentage' : 'fixed';
+          product.markupValue = markupValue.toString();
+          console.log(`🔧 Final price after markup: $${product.variants[0].price}`);
+          appliedMarkup = true; // Only apply first matching condition
+          break; // Exit after applying first condition
         }
       }
     }
     
-    const currentPrice = parseFloat(product.variants?.[0]?.price || '0');
-    console.log(`🔧 Current price: $${currentPrice}`);
-    console.log(`🔧 Total percentage markup: ${totalMarkupPercentage}%`);
-    console.log(`🔧 Total fixed markup: $${totalFixedMarkup}`);
-    
-    let newPrice = currentPrice;
-    
-    // Apply percentage markup first
-    if (totalMarkupPercentage > 0) {
-      newPrice = newPrice * (1 + totalMarkupPercentage / 100);
-      console.log(`🔧 After percentage markup: $${currentPrice} → $${newPrice.toFixed(2)}`);
-    }
-    
-    // Then apply fixed markup
-    if (totalFixedMarkup > 0) {
-      newPrice = newPrice + totalFixedMarkup;
-      console.log(`🔧 After fixed markup: $${(newPrice - totalFixedMarkup).toFixed(2)} → $${newPrice.toFixed(2)}`);
-    }
-    
-    if (newPrice !== currentPrice) {
-      product.variants[0].price = newPrice.toFixed(2);
-      product.markupApplied = true;
-      product.markupType = totalMarkupPercentage > 0 ? 'percentage' : 'fixed';
-      product.markupValue = totalMarkupPercentage > 0 ? totalMarkupPercentage.toString() : totalFixedMarkup.toString();
-      console.log(`🔧 Final price after markup: $${product.variants[0].price}`);
-    } else {
-      console.log('🔧 No markup applied - price unchanged');
+    if (!appliedMarkup) {
+      console.log('🔧 No valid markup applied - price unchanged');
     }
   } else {
     console.log('🔧 Conditions do not match, no markup applied');
