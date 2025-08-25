@@ -2,7 +2,7 @@
   "name": "supplir-quntity",
   "private": true,
   "scripts": {
-    "build": "remix vite:build && npx prisma migrate dev --name init",
+    "build": "remix vite:build && npx prisma generate && npx prisma migrate deploy",
     "dev": "shopify app dev",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
