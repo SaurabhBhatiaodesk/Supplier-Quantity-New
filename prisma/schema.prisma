@@ -1,0 +1,106 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres:admin1234@localhost:5432/Supplier-quantity"
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model Connection {
+  id             String   @id @default(cuid())
+  shop           String
+  type           String   // 'api' | 'csv'
+  name           String
+  apiUrl         String?
+  accessToken    String?
+  csvFileName    String?
+  supplierName   String?
+  supplierEmail  String?
+  status         String   @default("connected")
+  lastSync       DateTime?
+  scheduledTime  String?
+  scheduleEnabled Boolean  @default(false)
+  scheduleFrequency String? // 'daily' | 'weekly' | 'monthly' | 'test'
+  scheduleTime   String?
+  productCount   Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ImportedProduct {
+  id              String   @id @default(cuid())
+  shop            String
+  connectionId    String?
+  shopifyProductId String?
+  title           String
+  bodyHtml        String?
+  vendor          String?
+  productType     String?
+  tags            String?  // JSON array
+  status          String   @default("draft") // draft, published
+  price           String?
+  compareAtPrice  String?
+  sku             String?
+  barcode         String?
+  weight          Float?
+  weightUnit      String?
+  inventoryQuantity Int?
+  requiresShipping Boolean @default(true)
+  taxable         Boolean  @default(true)
+  images          String?  // JSON array
+  options         String?  // JSON array
+  variants        String?  // JSON array
+  importSessionId String?
+  markupApplied   Boolean  @default(false)
+  markupType      String?  // percentage, fixed
+  markupValue     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ImportSession {
+  id              String   @id @default(cuid())
+  shop            String
+  connectionId    String?
+  dataSource      String   // 'api' | 'csv'
+  importType      String   // 'all' | 'attribute'
+  importConfig    String   // 'draft' | 'published'
+  keyMappings     String   // JSON object
+  importFilters   String   // JSON object
+  markupConfig    String   // JSON object
+  totalProducts   Int      @default(0)
+  importedProducts Int     @default(0)
+  failedProducts  Int      @default(0)
+  currentProduct  String?  // Current product being processed
+  status          String   @default("running") // running, completed, failed
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

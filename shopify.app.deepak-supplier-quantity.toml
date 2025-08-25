@@ -1,0 +1,25 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "76ffd6478baa6da15a8cc1055c5c4d64"
+name = "Deepak-Supplier-Quantity"
+handle = "deepak-supplier-quantity"
+application_url = "https://gently-retention-retro-disable.trycloudflare.com"
+embedded = true
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
+
+[webhooks]
+api_version = "2025-07"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products,read_inventory,write_inventory,read_locations,read_themes,write_themes,read_customers,write_customers,write_publications"
+
+ 
+[auth]
+redirect_urls = ["https://gently-retention-retro-disable.trycloudflare.com/auth/callback", "https://gently-retention-retro-disable.trycloudflare.com/auth/shopify/callback", "https://gently-retention-retro-disable.trycloudflare.com/api/auth/callback"]
+
+[pos]
+embedded = false
