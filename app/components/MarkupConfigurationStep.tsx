@@ -35,16 +35,11 @@ import {
 
 // ----- constants / options -----
 const FIELD_OPTIONS = [
-  { label: "SKU", value: "sku" },
+  { label: "Title", value: "title" },
   { label: "Tags", value: "tags" },
   { label: "Type", value: "type" },
   { label: "Vendor", value: "vendor" },
-  { label: "Price", value: "price" },
   { label: "Cost Price", value: "cost_price" },
-  { label: "Retail Price", value: "retail_price" },
-  { label: "Weight", value: "weight" },
-  { label: "Inventory quantity", value: "inventory" },
-  { label: "Title", value: "title" },
 ];
 
 const CONDITION_OPTIONS = [
@@ -128,7 +123,7 @@ export default function MarkupConfigurationStep({
     value: string;              // numeric value (for fixed) or readonly for percent
   };
 
-  const MAX_CONDITIONS = 5; // Increased to allow more conditions
+  const MAX_CONDITIONS = 4; // Total 4 conditions (1 default + 3 additional)
 
   const [matchMode, setMatchMode] = useState<"all" | "any">("any");
   const [connector, setConnector] = useState<"AND" | "OR">("OR");
@@ -204,15 +199,18 @@ export default function MarkupConfigurationStep({
         ]
   );
 
-  // Initialize first condition as open when rows change
+  // Initialize all conditions as open when rows change
   useEffect(() => {
     if (rows.length > 0) {
-      const firstConditionId = rows[0].id;
-      setCollapsedConditions(prev => ({
-        ...prev,
-        [firstConditionId]: false // false means open
-      }));
-      console.log('🔧 Setting first condition as open:', firstConditionId);
+      const allConditionIds = rows.map(row => row.id);
+      setCollapsedConditions(prev => {
+        const updated = { ...prev };
+        allConditionIds.forEach(id => {
+          updated[id] = false; // false means open
+        });
+        return updated;
+      });
+      console.log('🔧 Setting all conditions as open:', allConditionIds);
     }
   }, [rows.length]);
 
@@ -234,37 +232,26 @@ export default function MarkupConfigurationStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, matchMode, connector]);
 
-  // Build dynamic field options from Step 4 selections + defaults
+  // Build dynamic field options from Step 4 selections ONLY
   const dynamicFieldOptions = useMemo(() => {
-    // Always include default field options
-    const defaultOptions = [...FIELD_OPTIONS];
-    
-    // Add selected filters from Step 4 if available
+    // If filters are selected in Step 4, show ONLY those filters
     if (selectedFiltersSummary && selectedFiltersSummary.length > 0) {
       const fromFilters = selectedFiltersSummary
         .map((g) => ({ label: g.key, value: g.key }))
-        .filter((o) => typeof o.value === 'string' && o.value.trim().length > 0);
+        .filter((o) => typeof o.value === 'string' && o.value.trim().length > 0)
+        .filter((o) => o.value.toLowerCase() !== 'sku'); // Exclude SKU
       
-      // Merge with defaults, avoiding duplicates
-      const allOptions = [...defaultOptions];
-      for (const filter of fromFilters) {
-        if (!allOptions.some(opt => opt.value === filter.value)) {
-          allOptions.push(filter);
-        }
-      }
-      
-      console.log('🔧 Dynamic field options:', {
+      console.log('🔧 Using ONLY Step 4 selected filters:', {
         selectedFilters: selectedFiltersSummary,
-        fromFilters,
-        allOptions: allOptions.map(o => o.value)
+        fromFilters: fromFilters.map(o => o.value)
       });
       
-      return allOptions;
+      return fromFilters;
     }
     
-    console.log('🔧 Using default field options:', defaultOptions.map(o => o.value));
-    // Return defaults when no filters selected
-    return defaultOptions;
+    // If no filters selected in Step 4, use default field options
+    console.log('🔧 No Step 4 filters selected, using default field options:', FIELD_OPTIONS.map(o => o.value));
+    return [...FIELD_OPTIONS];
   }, [selectedFiltersSummary]);
 
   const fieldOptionsWithPlaceholder = useMemo(() => {
@@ -296,6 +283,7 @@ export default function MarkupConfigurationStep({
   }, [dynamicFieldOptions]);
 
   const canAddRow = rows.length < MAX_CONDITIONS;
+  const remainingConditions = MAX_CONDITIONS - rows.length;
 
   function addRow() {
     if (!canAddRow) return;
@@ -401,32 +389,26 @@ export default function MarkupConfigurationStep({
   // ---- small render helper for a single condition card ----
   function ConditionCard({ row }: { row: Row }) {
     const isCollapsed = collapsedConditions[row.id] !== false; // Default to collapsed except first one
+    const isFirstCondition = rows[0]?.id === row.id;
     
     const conditionSummary = useMemo(() => {
-      const field = FIELD_OPTIONS.find((f) => f.value === row.field)?.label ?? row.field;
-      const op = CONDITION_OPTIONS.find((o) => o.value === row.operator)?.label ?? row.operator;
-      const value = row.tagText || '""';
-      const markup = row.markupType === "percent"
-        ? `${row.percentagePreset === "custom" ? row.customPercent || "0" : row.percentagePreset}%`
-        : `$${row.value || "0"}`;
-      
-      return `${field} ${op} ${value} → ${markup} markup`;
-    }, [row]);
+      const conditionNumber = rows.findIndex(r => r.id === row.id) + 1;
+      return `Condition ${conditionNumber}`;
+    }, [row, rows]);
 
     return (
       <Card key={row.id} background="bg-surface-secondary">
         <Box padding="300">
           <BlockStack gap="300">
-            {/* Collapsible Header */}
-            <InlineStack align="space-between" blockAlign="center">
-              <Button
-                variant="tertiary"
-                onClick={() => toggleConditionCollapse(row.id)}
-                icon={isCollapsed ? ChevronDownIcon : ChevronUpIcon}
-                accessibilityLabel={isCollapsed ? "Expand condition" : "Collapse condition"}
-              >
-                {conditionSummary}
-              </Button>
+                         {/* Collapsible Header */}
+             <InlineStack align="space-between" blockAlign="center">
+               <Button
+                 variant="tertiary"
+                 onClick={() => toggleConditionCollapse(row.id)}
+                 accessibilityLabel={isCollapsed ? "Expand condition" : "Collapse condition"}
+               >
+                 {conditionSummary}
+               </Button>
               <Button
                 icon={DeleteIcon}
                 onClick={() => removeRow(row.id)}
@@ -438,29 +420,31 @@ export default function MarkupConfigurationStep({
             {/* Collapsible Content */}
             {!isCollapsed && (
               <BlockStack gap="300">
-                <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
-                  <Select
-                    label="Field"
-                    options={fieldOptionsWithPlaceholder}
-                    value={fieldOptionsWithPlaceholder.some(o => o.value === row.field) ? row.field : (fieldOptionsWithPlaceholder[0]?.value || 'title')}
-                    onChange={(val) => {
-                      updateRow(row.id, "field", val);
-                      // Auto-set operator to "between" for price fields
-                      if (val === 'price' || val === 'Variant Price' || val.toLowerCase().includes('price')) {
-                        updateRow(row.id, "operator", "between");
-                      }
-                    }}
-                  />
-                  <Select
-                    label="Condition"
-                    options={CONDITION_OPTIONS}
-                    value={row.operator}
-                    onChange={(val) => updateRow(row.id, "operator", val)}
-                  />
-                  <Box>
-                    {/* Empty box for layout consistency */}
-                  </Box>
-                </InlineGrid>
+                                 <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
+                   <Select
+                     label={isFirstCondition ? "Field" : ""}
+                     labelHidden={!isFirstCondition}
+                     options={fieldOptionsWithPlaceholder}
+                     value={fieldOptionsWithPlaceholder.some(o => o.value === row.field) ? row.field : (fieldOptionsWithPlaceholder[0]?.value || 'title')}
+                     onChange={(val) => {
+                       updateRow(row.id, "field", val);
+                       // Auto-set operator to "between" for price fields
+                       if (val === 'price' || val === 'Variant Price' || val.toLowerCase().includes('price')) {
+                         updateRow(row.id, "operator", "between");
+                       }
+                     }}
+                   />
+                   <Select
+                     label={isFirstCondition ? "Condition" : ""}
+                     labelHidden={!isFirstCondition}
+                     options={CONDITION_OPTIONS}
+                     value={row.operator}
+                     onChange={(val) => updateRow(row.id, "operator", val)}
+                   />
+                   <Box>
+                     {/* Empty box for layout consistency */}
+                   </Box>
+                 </InlineGrid>
 
                 {(row.field === 'price' || row.field === 'Variant Price' || row.field.toLowerCase().includes('price')) ? (
                   <InlineGrid columns={{ xs: 1, md: 2 }} gap="300">
@@ -574,84 +558,90 @@ export default function MarkupConfigurationStep({
                   />
                 )}
 
-                <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
-                  <Select
-                    label="Markup Type"
-                    options={MARKUP_TYPES}
-                    value={row.markupType}
-                    onChange={(val) => updateRow(row.id, "markupType", val as Row["markupType"])}
-                  />
+                                 <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
+                   <Select
+                     label={isFirstCondition ? "Markup Type" : ""}
+                     labelHidden={!isFirstCondition}
+                     options={MARKUP_TYPES}
+                     value={row.markupType}
+                     onChange={(val) => updateRow(row.id, "markupType", val as Row["markupType"])}
+                   />
 
-                  {row.markupType === "percent" ? (
-                    <Select
-                      label="Percentage"
-                      options={PERCENTAGE_PRESETS}
-                      value={row.percentagePreset}
-                      onChange={(val) => onChangePercentagePreset(row.id, val)}
-                    />
-                  ) : (
-                    <TextField
-                      label="Fixed Amount"
-                      type="number"
-                      value={row.value}
-                      onChange={(val) => updateRow(row.id, "value", val)}
-                      autoComplete="off"
-                      suffix="$"
-                      placeholder="Enter amount"
-                      onFocus={(e) => {
-                        if (e?.target) {
-                          const target = e.target as HTMLInputElement;
-                          if (target) target.select();
-                        }
-                      }}
-                    />
-                  )}
+                   {row.markupType === "percent" ? (
+                     <Select
+                       label={isFirstCondition ? "Percentage" : ""}
+                       labelHidden={!isFirstCondition}
+                       options={PERCENTAGE_PRESETS}
+                       value={row.percentagePreset}
+                       onChange={(val) => onChangePercentagePreset(row.id, val)}
+                     />
+                   ) : (
+                     <TextField
+                       label={isFirstCondition ? "Fixed Amount" : ""}
+                       labelHidden={!isFirstCondition}
+                       type="number"
+                       value={row.value}
+                       onChange={(val) => updateRow(row.id, "value", val)}
+                       autoComplete="off"
+                       suffix="$"
+                       placeholder="Enter amount"
+                       onFocus={(e) => {
+                         if (e?.target) {
+                           const target = e.target as HTMLInputElement;
+                           if (target) target.select();
+                         }
+                       }}
+                     />
+                   )}
 
-                  {row.markupType === "percent" && row.percentagePreset !== "custom" ? (
-                    <TextField
-                      label="Value"
-                      value={row.value}
-                      onChange={(val) => updateRow(row.id, "value", val)}
-                      readOnly
-                      suffix="%"
-                      autoComplete="off"
-                    />
-                  ) : row.markupType === "percent" ? (
-                    <TextField
-                      label="Custom %"
-                      placeholder="Enter %"
-                      type="number"
-                      value={row.customPercent}
-                      onChange={(val) => {
-                        updateRow(row.id, "customPercent", val);
-                        updateRow(row.id, "value", val); // Also update value field
-                      }}
-                      suffix="%"
-                      autoComplete="off"
-                      onFocus={(e) => {
-                        if (e?.target) {
-                          const target = e.target as HTMLInputElement;
-                          if (target) target.select();
-                        }
-                      }}
-                    />
-                  ) : (
-                    <TextField
-                      label="Amount"
-                      value={row.value}
-                      onChange={(val) => updateRow(row.id, "value", val)}
-                      type="number"
-                      suffix="$"
-                      placeholder="Enter amount"
-                      autoComplete="off"
-                      onFocus={(e) => {
-                        if (e?.target) {
-                          const target = e.target as HTMLInputElement;
-                          if (target) target.select();
-                        }
-                      }}
-                    />
-                  )}
+                                     {row.markupType === "percent" && row.percentagePreset !== "custom" ? (
+                     <TextField
+                       label={isFirstCondition ? "Value" : ""}
+                       labelHidden={!isFirstCondition}
+                       value={row.value}
+                       onChange={(val) => updateRow(row.id, "value", val)}
+                       readOnly
+                       suffix="%"
+                       autoComplete="off"
+                     />
+                   ) : row.markupType === "percent" ? (
+                     <TextField
+                       label={isFirstCondition ? "Custom %" : ""}
+                       labelHidden={!isFirstCondition}
+                       placeholder="Enter %"
+                       type="number"
+                       value={row.customPercent}
+                       onChange={(val) => {
+                         updateRow(row.id, "customPercent", val);
+                         updateRow(row.id, "value", val); // Also update value field
+                       }}
+                       suffix="%"
+                       autoComplete="off"
+                       onFocus={(e) => {
+                         if (e?.target) {
+                           const target = e.target as HTMLInputElement;
+                           if (target) target.select();
+                         }
+                       }}
+                     />
+                   ) : (
+                     <TextField
+                       label={isFirstCondition ? "Amount" : ""}
+                       labelHidden={!isFirstCondition}
+                       value={row.value}
+                       onChange={(val) => updateRow(row.id, "value", val)}
+                       type="number"
+                       suffix="$"
+                       placeholder="Enter amount"
+                       autoComplete="off"
+                       onFocus={(e) => {
+                         if (e?.target) {
+                           const target = e.target as HTMLInputElement;
+                           if (target) target.select();
+                         }
+                       }}
+                     />
+                   )}
                 </InlineGrid>
               </BlockStack>
             )}
@@ -744,7 +734,7 @@ export default function MarkupConfigurationStep({
                 </Box>
 
                 {/* OR Condition Selection - Hidden for single condition */}
-                {/* <InlineStack gap="300" blockAlign="center">
+                <InlineStack gap="300" blockAlign="center">
                   <Text as="span">Products must match:</Text>
                   <InlineStack gap="200" blockAlign="center" align="start">
                     <RadioButton
@@ -755,7 +745,7 @@ export default function MarkupConfigurationStep({
                       onChange={(checked) => checked && setMatchMode("any")}
                     />
                   </InlineStack>
-                </InlineStack> */}
+                </InlineStack>
 
                 {/* Explanation */}
                 <Box padding="300" background="bg-surface-secondary" borderRadius="300">
@@ -781,7 +771,7 @@ export default function MarkupConfigurationStep({
                       <ConditionCard row={row} />
                       
                       {/* AND/OR connector between conditions - Hidden for single condition */}
-                      {/* {index < rows.length - 1 && (
+                      {index < rows.length - 1 && (
                         <InlineStack align="center" blockAlign="center" gap="300">
                           <div style={{ flex: 1 }}>
                             <Divider />
@@ -797,18 +787,18 @@ export default function MarkupConfigurationStep({
                             <Divider />
                           </div>
                         </InlineStack>
-                      )} */}
+                      )}
                     </div>
                   ))}
 
                   {/* Add row button - Hidden for single condition */}
-                  {/* {canAddRow && (
+                  {canAddRow && (
                     <div>
                       <Button icon={PlusIcon} onClick={addRow}>
-                        Add another condition
+                        Add another condition ({remainingConditions} remaining)
                       </Button>
                     </div>
-                  )} */}
+                  )}
                 </BlockStack>
               </BlockStack>
             </Box>

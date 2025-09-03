@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { json, LoaderFunctionArgs } from '@remix-run/node';
 import { useLoaderData } from '@remix-run/react';
 import { authenticate } from '../shopify.server';
@@ -14,7 +14,8 @@ import {
   Box,
   BlockStack,
   InlineStack,
-  Divider
+  Divider,
+  LegacyCard, Tabs
 } from '@shopify/polaris';
 import { CheckCircleIcon, ChevronRightIcon } from '@shopify/polaris-icons';
 
@@ -30,8 +31,7 @@ import ImportConfigurationStep from '../components/ImportConfigurationStep';
 import ImportProcessStep from '../components/ImportProcessStep';
 import CsvImportStep from '../components/CsvImportStep';
 import ProgressSteps from '../components/ProgressSteps';
-import AppCsvFile from '../components/AppCsvFile';
-
+import AppCsvFile from '../components/AppCsvFile'; 
 export async function loader({ request }: LoaderFunctionArgs) {
   await authenticate.admin(request);
   return null;
@@ -729,6 +729,26 @@ export default function Index() {
     }
   };
 
+  const [selected, setSelected] = useState(0);
+
+  const handleTabChange = useCallback(
+    (selectedTabIndex:any) => setSelected(selectedTabIndex),
+    []
+  );
+ 
+  const tabs = [
+    {
+      id: "supplier-directory",
+      content: "Supplier Directory",
+      panelID: "supplier-directory-content",
+    },
+    {
+      id: "stock-adjustment",
+      content: "Stock Adjustment",
+      panelID: "stock-adjustment-content",
+    },
+  ];
+
   return (
     <Page
       title="Product Import Manager"
@@ -738,20 +758,31 @@ export default function Index() {
         disabled: true
       }}
     >
-      <Layout>
-        {/* Progress Steps - Hide when on supplier management screens */}
-        {!(currentStep === 1 && (showSupplierListing || showSupplierDetails || showCsvImport)) && (
-          <Layout.Section>
-            <ProgressSteps currentStep={currentStep} steps={steps} />
-          </Layout.Section>
-        )}
+  <Tabs tabs={tabs} selected={selected} onSelect={handleTabChange}>
+        <Layout>
+          {selected === 0 && (
+            <>
+              {/* Progress Steps - Hide when on supplier management screens */}
+              {!(currentStep === 1 &&
+                (showSupplierListing || showSupplierDetails || showCsvImport)) && (
+                <Layout.Section>
+                  <ProgressSteps currentStep={currentStep} steps={steps} />
+                </Layout.Section>
+              )}
 
-        {/* Current Step Content */}
-        <Layout.Section>
-          {renderCurrentStep()}
-        </Layout.Section>
-      </Layout>
-      <AppCsvFile />
+              {/* Current Step Content */}
+              <Layout.Section>{renderCurrentStep()}</Layout.Section>
+            </>
+          )}
+
+          {selected === 1 && (
+            <Layout.Section>
+              <AppCsvFile />
+            </Layout.Section>
+          )}
+        </Layout>
+      </Tabs>
+
     </Page>
   );
 }

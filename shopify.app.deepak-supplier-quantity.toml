@@ -3,12 +3,8 @@
 client_id = "76ffd6478baa6da15a8cc1055c5c4d64"
 name = "App-Supplier-Quantity"
 handle = "deepak-supplier-quantity"
-application_url = "https://snapshot-joseph-found-jump.trycloudflare.com"
+application_url = "https://tape-pop-nova-lambda.trycloudflare.com"
 embedded = true
-
-[build]
-automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [webhooks]
 api_version = "2025-07"
@@ -18,10 +14,13 @@ api_version = "2025-07"
 scopes = "read_customers,read_inventory,read_locations,read_themes,write_customers,write_inventory,write_products,write_publications,write_themes"
 
 [auth]
-redirect_urls = ["https://snapshot-joseph-found-jump.trycloudflare.com/auth/callback", "https://snapshot-joseph-found-jump.trycloudflare.com/auth/shopify/callback", "https://snapshot-joseph-found-jump.trycloudflare.com/api/auth/callback"]
+redirect_urls = ["https://tape-pop-nova-lambda.trycloudflare.com/auth/callback", "https://tape-pop-nova-lambda.trycloudflare.com/auth/shopify/callback", "https://tape-pop-nova-lambda.trycloudflare.com/api/auth/callback"]
 
 [pos]
 embedded = false
 
 [app_preferences]
 url = "https://supplier-quantity-71088c98616f.herokuapp.com/"
+
+[build]
+automatically_update_urls_on_dev = true

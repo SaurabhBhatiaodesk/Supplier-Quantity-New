@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "eba69e6e0b92d12903ace188ca70d23a"
-application_url = "https://attended-judges-comm-nations.trycloudflare.com"
+application_url = "https://advertiser-brutal-setup-wright.trycloudflare.com"
 embedded = true
 name = "supplir quntity"
 handle = "supplir-quntity"
@@ -26,11 +26,7 @@ api_version = "2025-07"
 scopes = "write_products"
 
 [auth]
-redirect_urls = [
-  "https://attended-judges-comm-nations.trycloudflare.com/auth/callback",
-  "https://attended-judges-comm-nations.trycloudflare.com/auth/shopify/callback",
-  "https://attended-judges-comm-nations.trycloudflare.com/api/auth/callback"
-]
+redirect_urls = ["https://advertiser-brutal-setup-wright.trycloudflare.com/auth/callback", "https://advertiser-brutal-setup-wright.trycloudflare.com/auth/shopify/callback", "https://advertiser-brutal-setup-wright.trycloudflare.com/api/auth/callback"]
 
 [pos]
 embedded = false

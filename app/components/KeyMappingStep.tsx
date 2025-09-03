@@ -216,7 +216,20 @@ export default function KeyMappingStep({
       }
       
       console.log('🔍 Final headers to set:', headers);
-      setSourceFields(headers);
+      
+      // Check for duplicates in headers
+      const duplicateHeaders = headers.filter((item, index) => headers.indexOf(item) !== index);
+      if (duplicateHeaders.length > 0) {
+        console.warn('⚠️ Duplicate headers found:', duplicateHeaders);
+      }
+      
+      // Remove duplicates from headers before setting
+      const uniqueHeaders = [...new Set(headers)];
+      if (uniqueHeaders.length !== headers.length) {
+        console.log('🔍 Removed duplicate headers. Original count:', headers.length, 'Unique count:', uniqueHeaders.length);
+      }
+      
+      setSourceFields(uniqueHeaders);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataSource, apiCredentials?.apiUrl, apiCredentials?.accessToken, csvData]);
@@ -367,6 +380,27 @@ export default function KeyMappingStep({
     },
     [sourceFields, rows.map(r => r.source).join(',')] // Use string instead of array
   );
+
+  // Function to get source options for a specific row (excluding already selected ones)
+  const getSourceOptionsForRow = (currentRowId: string) => {
+    // Get all currently selected source values except the current row's value
+    const otherSelectedSources = rows
+      .filter(r => r.id !== currentRowId && r.source)
+      .map(r => r.source);
+    
+    // Filter out already selected sources from other rows
+    const availableOptions = sourceFields.filter(field => !otherSelectedSources.includes(field));
+    
+    // Add the current row's selected value back if it exists and is not already in availableOptions
+    const currentRow = rows.find(r => r.id === currentRowId);
+    if (currentRow?.source && !availableOptions.includes(currentRow.source)) {
+      availableOptions.push(currentRow.source);
+    }
+    
+    // Remove duplicates and return
+    const uniqueOptions = [...new Set(availableOptions)];
+    return toOptions(uniqueOptions, DatabaseIcon);
+  };
   const targetOptions = useMemo(
     () => {
       // Get all currently selected target values
@@ -386,6 +420,27 @@ export default function KeyMappingStep({
     },
     [shopifyFields, rows.map(r => r.target).join(',')] // Use string instead of array
   );
+
+  // Function to get target options for a specific row (excluding already selected ones)
+  const getTargetOptionsForRow = (currentRowId: string) => {
+    // Get all currently selected target values except the current row's value
+    const otherSelectedTargets = rows
+      .filter(r => r.id !== currentRowId && r.target)
+      .map(r => r.target);
+    
+    // Filter out already selected targets from other rows
+    const availableOptions = shopifyFields.filter(field => !otherSelectedTargets.includes(field));
+    
+    // Add the current row's selected value back if it exists and is not already in availableOptions
+    const currentRow = rows.find(r => r.id === currentRowId);
+    if (currentRow?.target && !availableOptions.includes(currentRow.target)) {
+      availableOptions.push(currentRow.target);
+    }
+    
+    // Remove duplicates and return
+    const uniqueOptions = [...new Set(availableOptions)];
+    return toOptions(uniqueOptions, CartIcon);
+  };
 
   function addRow() {
     console.log('🔍 addRow called');
@@ -542,7 +597,7 @@ export default function KeyMappingStep({
                         <Select
                           label="Select source field"
                           labelHidden
-                          options={sourceOptions}
+                          options={getSourceOptionsForRow(row.id)}
                           value={row.source}
                           onChange={(v) => {
                             console.log('🔍 Source field changed:', { rowId: row.id, oldValue: row.source, newValue: v });
@@ -556,7 +611,7 @@ export default function KeyMappingStep({
                             <Select
                               label="Select Shopify field"
                               labelHidden
-                              options={targetOptions}
+                              options={getTargetOptionsForRow(row.id)}
                               value={row.target}
                               onChange={(v) => {
                                 console.log('🔍 Shopify field changed:', { rowId: row.id, oldValue: row.target, newValue: v });

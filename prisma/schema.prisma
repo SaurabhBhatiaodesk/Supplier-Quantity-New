@@ -8,6 +8,11 @@ generator client {
 // Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+//datasource db {
+  //provider = "postgresql"
+ // url      = "postgresql://postgres:admin1234@localhost:5432/Supplier-quantity"
+//}
+
 datasource db {
   provider = "postgresql"
   url      = "postgres://ucae2g1i820icu:pf5980f3f28edccf70ee8dd93db0890362f48f5896c3af4ad205e2b1a5e7fd7ff@casrkuuedp6an1.cluster-czrs8kj4isg7.us-east-1.rds.amazonaws.com:5432/danm1f1oekhkrh"

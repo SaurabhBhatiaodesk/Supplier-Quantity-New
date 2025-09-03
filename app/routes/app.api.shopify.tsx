@@ -1082,6 +1082,24 @@ function checkCondition(product: any, condition: any) {
       console.log('🔍 Found price in product.price:', productValue);
     } else {
       console.log('🔍 No price found in any location');
+      console.log('🔍 Available product fields:', Object.keys(product));
+      console.log('🔍 Variants structure:', product.variants);
+    }
+  }
+  
+  // Special handling for compareAtPrice field - check multiple locations
+  if (field === 'compareAtPrice' || field === 'Compare At Price') {
+    console.log('🔍 CompareAtPrice field detected, checking multiple locations');
+    if (product.variants && product.variants.length > 0 && product.variants[0].compareAtPrice) {
+      productValue = product.variants[0].compareAtPrice;
+      console.log('🔍 Found compareAtPrice in variants[0].compareAtPrice:', productValue);
+    } else if (product.compareAtPrice) {
+      productValue = product.compareAtPrice;
+      console.log('🔍 Found compareAtPrice in product.compareAtPrice:', productValue);
+    } else {
+      console.log('🔍 No compareAtPrice found in any location');
+      console.log('🔍 Available product fields:', Object.keys(product));
+      console.log('🔍 Variants structure:', product.variants);
     }
   }
   
@@ -1209,8 +1227,8 @@ function checkCondition(product: any, condition: any) {
     case 'between':
       const [min, max] = conditionValueStr.split('-').map(Number);
       const numValue = parseFloat(productValueStr);
-      result = numValue >= min && (max === 0 || numValue <= max);
-      console.log(`🔍 Between check: ${numValue} >= ${min} && (${max} === 0 || ${numValue} <= ${max}) = ${result}`);
+      result = numValue >= min && numValue <= max;
+      console.log(`🔍 Between check: ${numValue} >= ${min} && ${numValue} <= ${max} = ${result}`);
       break;
     default:
       console.log(`❌ Unknown operator: ${operator}`);
@@ -1253,36 +1271,87 @@ function processCsvData(csvData: any, importFilters: any, keyMappings: any) {
     // Get unique product indices from selected values
     const selectedIndices = new Set<number>();
     
+    console.log('🔍 === DETAILED FILTER ANALYSIS ===');
+    console.log('CSV Headers:', csvData.headers);
+    console.log('CSV Rows count:', csvData.rows.length);
+    console.log('First few rows:', csvData.rows.slice(0, 3));
+    
+    // Create a map of selected values for exact matching
+    const selectedValueMap = new Map();
     for (const token of importFilters.selectedValues) {
       const [key, value] = token.split('::');
       if (!key || !value) continue;
       
-      console.log(`🔍 Looking for key: "${key}" with value: "${value}"`);
-      
-      // Find all rows that match this value
-      csvData.rows.forEach((row: any, index: number) => {
-        const rowValue = String(row[key] || '').trim();
-        const filterValue = String(value).trim();
-        
-        console.log(`  Row ${index}: "${rowValue}" vs "${filterValue}"`);
-        
-        // Exact match (case-insensitive)
-        if (rowValue.toLowerCase() === filterValue.toLowerCase()) {
-          console.log(`  ✅ Exact match found! Adding complete row ${index}`);
-          selectedIndices.add(index);
-        }
-        // Partial match (if value contains the filter)
-        else if (rowValue.toLowerCase().includes(filterValue.toLowerCase())) {
-          console.log(`  ✅ Partial match found! Adding complete row ${index}`);
-          selectedIndices.add(index);
-        }
-        // Reverse partial match (if filter contains the value)
-        else if (filterValue.toLowerCase().includes(rowValue.toLowerCase())) {
-          console.log(`  ✅ Reverse partial match found! Adding complete row ${index}`);
-          selectedIndices.add(index);
-        }
-      });
+      if (!selectedValueMap.has(key)) {
+        selectedValueMap.set(key, new Set());
+      }
+      selectedValueMap.get(key).add(value.toLowerCase());
     }
+    
+    console.log('🔍 Selected value map:', Object.fromEntries(
+      Array.from(selectedValueMap.entries()).map(([key, values]) => [key, Array.from(values)])
+    ));
+    
+    // Find rows that match EXACTLY the selected values
+    csvData.rows.forEach((row: any, index: number) => {
+      // Handle case where row might be an array instead of object
+      let processedRow = row;
+      if (Array.isArray(row) && csvData.headers) {
+        // Convert array to object using headers
+        processedRow = {};
+        csvData.headers.forEach((header: string, i: number) => {
+          processedRow[header] = row[i] || '';
+        });
+      } else if (typeof row === 'object' && row !== null) {
+        // Row is already an object
+        processedRow = row;
+      } else {
+        console.error(`❌ Invalid row structure at index ${index}:`, row);
+        return; // Skip this row
+      }
+      
+      // Check if this row matches ANY of the selected values
+      let rowMatches = false;
+      for (const [key, selectedValues] of selectedValueMap) {
+        const rowValue = String(processedRow[key] || '').trim().toLowerCase();
+        if (selectedValues.has(rowValue)) {
+          console.log(`  ✅ Row ${index} matches selected value: ${key}="${rowValue}"`);
+          rowMatches = true;
+          break; // Found a match, no need to check other keys
+        }
+        
+        // Handle decimal tolerance for price fields
+        if (key === 'price' || key.toLowerCase().includes('price')) {
+          const rowPrice = parseFloat(rowValue);
+          if (!isNaN(rowPrice)) {
+            for (const selectedValue of selectedValues) {
+              const filterPrice = parseFloat(selectedValue);
+              if (!isNaN(filterPrice)) {
+                // Allow tolerance of ±0.01 for price matching
+                const tolerance = 0.01;
+                if (Math.abs(rowPrice - filterPrice) <= tolerance) {
+                  console.log(`  ✅ Row ${index} matches price with tolerance: ${key}="${rowValue}" ≈ "${selectedValue}" (tolerance: ±${tolerance})`);
+                  rowMatches = true;
+                  break; // Found a match, no need to check other keys
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      if (rowMatches) {
+        console.log(`  ✅ Adding row ${index} to selected products`);
+        selectedIndices.add(index);
+      }
+    });
+    
+    console.log('🔍 === FILTER RESULTS ===');
+    console.log('Selected indices:', Array.from(selectedIndices));
+    console.log('Selected indices count:', selectedIndices.size);
+    console.log('Expected products:', importFilters.selectedValues.length);
+    console.log('Selected values:', importFilters.selectedValues);
+    console.log('=== END FILTER ANALYSIS ===');
     
     // Get selected rows
     filteredRows = Array.from(selectedIndices).map(index => csvData.rows[index]);
@@ -1298,38 +1367,89 @@ function processCsvData(csvData: any, importFilters: any, keyMappings: any) {
   
   // Convert filtered rows to product format
   const products = filteredRows.map((row: any, index: number) => {
+    // Debug logging for row structure
+    console.log(`🔍 Processing row ${index}:`, {
+      rowType: typeof row,
+      isArray: Array.isArray(row),
+      rowKeys: Array.isArray(row) ? 'Array' : Object.keys(row),
+      rowValues: Array.isArray(row) ? row : Object.values(row),
+      sampleValue: Array.isArray(row) ? row[0] : row[Object.keys(row)[0]]
+    });
+    
+    // Ensure row is an object with proper field names
+    let processedRow = row;
+    if (Array.isArray(row) && csvData.headers) {
+      // Convert array to object using headers
+      processedRow = {};
+      csvData.headers.forEach((header: string, i: number) => {
+        processedRow[header] = row[i] || '';
+      });
+      console.log(`🔧 Converted array row to object:`, processedRow);
+    } else if (typeof row === 'object' && row !== null) {
+      // Row is already an object, ensure it has the expected structure
+      processedRow = row;
+      console.log(`🔧 Row is already an object:`, processedRow);
+    } else {
+      console.error(`❌ Invalid row structure:`, row);
+      // Create a fallback object
+      processedRow = {
+        Title: `Product ${index + 1}`,
+        SKU: `SKU-${index + 1}`,
+        Tags: '',
+        price: '10.00'
+      };
+    }
+    
+    // Extract tags properly - handle both string and array formats
+    let tags: string[] = [];
+    
+    // Check multiple possible tag field names
+    const possibleTagFields = ['Tags', 'tags', 'Tag', 'tag', 'Categories', 'categories'];
+    let foundTagField = null;
+    
+    for (const fieldName of possibleTagFields) {
+      if (processedRow[fieldName]) {
+        foundTagField = fieldName;
+        console.log(`🔍 Found tags in field: ${fieldName} = ${processedRow[fieldName]}`);
+        break;
+      }
+    }
+    
+    if (foundTagField) {
+      const tagValue = processedRow[foundTagField];
+      if (typeof tagValue === 'string') {
+        // Split by comma and clean up
+        tags = tagValue.split(',').map((tag: string) => tag.trim()).filter(Boolean);
+        console.log(`🔍 Extracted tags from string: [${tags.join(', ')}]`);
+      } else if (Array.isArray(tagValue)) {
+        // Already an array, clean up
+        tags = tagValue.map((tag: string) => String(tag).trim()).filter(Boolean);
+        console.log(`🔍 Extracted tags from array: [${tags.join(', ')}]`);
+      }
+    } else {
+      console.log(`⚠️ No tags field found. Available fields: ${Object.keys(processedRow).join(', ')}`);
+    }
+    
     const product = {
-      title: row.Title || row.title || `Product ${index + 1}`,
-      descriptionHtml: row.Description || row.description || '',
-      vendor: row.Vendor || row.vendor || 'Default Vendor',
-      productType: row.Type || row.type || 'Default Type',
-      tags: row.Tags ? row.Tags.split(',').map((tag: string) => tag.trim()) : [],
+      title: processedRow.Title || processedRow.title || processedRow['Product Title'] || `Product ${index + 1}`,
+      descriptionHtml: processedRow.Description || processedRow.description || '',
+      vendor: processedRow.Vendor || processedRow.vendor || 'Default Vendor',
+      productType: processedRow.Type || processedRow.type || 'Default Type',
+      tags: tags,
       status: 'DRAFT',
       variants: [{
-        price: row['Variant Price'] || row.price || '10.00',
-        compareAtPrice: row['Variant Compare At Price'] || row.compareAtPrice || '',
-        sku: row.SKU || row.sku || `SKU-${index + 1}`,
-        barcode: row['Variant Barcode'] || row.barcode || '',
-        inventoryQuantity: row['Variant Inventory Quantity'] || row.inventoryQuantity || 0,
-        image_url: row['Image URL'] || row.image_url || ''
+        price: processedRow['Variant Price'] || processedRow.price || processedRow['Buffer Quantity'] || '10.00',
+        compareAtPrice: processedRow['Variant Compare At Price'] || processedRow.compareAtPrice || '',
+        sku: processedRow.SKU || processedRow.sku || `SKU-${index + 1}`,
+        barcode: processedRow['Variant Barcode'] || processedRow.barcode || '',
+        inventoryQuantity: processedRow['Variant Inventory Quantity'] || processedRow.inventoryQuantity || 0,
+        image_url: processedRow['Image URL'] || processedRow.image_url || ''
       }]
     };
     
-    // Add selected filter values as tags for markup conditions
-    if (importFilters?.selectedValues?.length > 0) {
-      const filterTags: string[] = [];
-      for (const token of importFilters.selectedValues) {
-        const [key, value] = token.split('::');
-        if (key && value) {
-          // Add the value as a tag for markup conditions
-          filterTags.push(value);
-        }
-      }
-      if (filterTags.length > 0) {
-        product.tags = [...(product.tags || []), ...filterTags];
-        console.log(`Added filter tags to CSV product: ${filterTags.join(', ')}`);
-      }
-    }
+         // Use the original tags from CSV, don't override with filter values
+     // The tags should come from the CSV data itself, not from selected filters
+     console.log(`✅ Using original CSV tags: ${product.tags.join(', ')}`);
     
     return product;
   });
@@ -1451,7 +1571,7 @@ async function fetchApiData(apiCredentials: any, importFilters: any, keyMappings
           }
         }
         
-        // Check if ANY selected value matches (simple OR logic)
+        // Check if ANY selected value matches (exact match only)
         for (const token of importFilters.selectedValues) {
           const [key, value] = token.split('::');
           if (!key || !value) continue;
@@ -1461,20 +1581,25 @@ async function fetchApiData(apiCredentials: any, importFilters: any, keyMappings
           
           console.log(`Checking API item ${key}: "${itemValue}" vs "${filterValue}"`);
           
-          // Exact match (case-insensitive)
+          // Exact match with tolerance for decimal differences (case-insensitive)
           if (itemValue.toLowerCase() === filterValue.toLowerCase()) {
             console.log(`✅ Exact match found for ${key}: "${itemValue}"`);
             return true; // Found a match, include this item
           }
-          // Partial match (if value contains the filter)
-          else if (itemValue.toLowerCase().includes(filterValue.toLowerCase())) {
-            console.log(`✅ Partial match found for ${key}: "${itemValue}"`);
-            return true; // Found a match, include this item
-          }
-          // Reverse partial match (if filter contains the value)
-          else if (filterValue.toLowerCase().includes(itemValue.toLowerCase())) {
-            console.log(`✅ Reverse partial match found for ${key}: "${itemValue}"`);
-            return true; // Found a match, include this item
+          
+          // Handle decimal tolerance for price fields
+          if (key === 'price' || key.toLowerCase().includes('price')) {
+            const itemPrice = parseFloat(itemValue);
+            const filterPrice = parseFloat(filterValue);
+            
+            if (!isNaN(itemPrice) && !isNaN(filterPrice)) {
+              // Allow tolerance of ±0.01 for price matching
+              const tolerance = 0.01;
+              if (Math.abs(itemPrice - filterPrice) <= tolerance) {
+                console.log(`✅ Price match with tolerance: "${itemValue}" ≈ "${filterValue}" (tolerance: ±${tolerance})`);
+                return true; // Found a match, include this item
+              }
+            }
           }
         }
         
@@ -1526,33 +1651,15 @@ async function fetchApiData(apiCredentials: any, importFilters: any, keyMappings
         }]
       };
       
-      // Add selected filter values as tags for markup conditions
-      if (importFilters?.selectedValues?.length > 0) {
-        const filterTags: string[] = [];
-        for (const token of importFilters.selectedValues) {
-          const [key, value] = token.split('::');
-          if (key && value) {
-            // Add the value as a tag for markup conditions
-            filterTags.push(value);
-          }
-        }
-        if (filterTags.length > 0) {
-          shopifyProduct.tags = [...(shopifyProduct.tags || []), ...filterTags];
-          console.log(`Added filter tags to product: ${filterTags.join(', ')}`);
-        }
-      }
+             // Use the original tags from API data, don't override with filter values
+       // The tags should come from the API data itself, not from selected filters
+       console.log(`✅ Using original API tags: ${shopifyProduct.tags.join(', ')}`);
       
-      // Ensure tags array exists for markup conditions
-      if (!shopifyProduct.tags || shopifyProduct.tags.length === 0) {
-        shopifyProduct.tags = ['default', 'Sandeep']; // Add Sandeep tag for testing
-        console.log('Added default tags to product for markup conditions:', shopifyProduct.tags);
-      } else {
-        // Add Sandeep tag if not already present
-        if (!shopifyProduct.tags.includes('Sandeep')) {
-          shopifyProduct.tags.push('Sandeep');
-          console.log('Added Sandeep tag to existing tags:', shopifyProduct.tags);
-        }
-      }
+             // Ensure tags array exists for markup conditions
+       if (!shopifyProduct.tags || shopifyProduct.tags.length === 0) {
+         shopifyProduct.tags = ['default']; // Only add default tag
+         console.log('Added default tag to product for markup conditions:', shopifyProduct.tags);
+       }
       
       // Limit tags array to prevent Shopify API errors
       shopifyProduct.tags = limitTagsArray(shopifyProduct.tags, 250);
@@ -1577,84 +1684,143 @@ function applyMarkupRules(product: any, markupConfig: any) {
     title: product.title,
     sku: product.variants?.[0]?.sku,
     price: product.variants?.[0]?.price,
-    tags: product.tags
+    tags: product.tags,
+    tagsType: typeof product.tags,
+    tagsLength: Array.isArray(product.tags) ? product.tags.length : 'not array'
   });
-  console.log('🔧 Markup config received:', markupConfig);
+  console.log('🔧 Markup config received:', JSON.stringify(markupConfig, null, 2));
+  console.log('🔧 Conditions type:', markupConfig?.conditionsType);
+  console.log('🔧 Rules count:', markupConfig?.rules?.length || 0);
   
-  if (!markupConfig?.conditions?.length) {
+  // Only apply markup if this is a selected product
+  if (!markupConfig || (!markupConfig.rules && !markupConfig.conditions) || 
+      (markupConfig.rules && markupConfig.rules.length === 0) || 
+      (markupConfig.conditions && markupConfig.conditions.length === 0)) {
+    console.log('🔧 No markup config or rules/conditions found, skipping markup');
+    return product;
+  }
+  
+  // Handle both "conditions" and "rules" structure
+  const conditions = markupConfig?.conditions || markupConfig?.rules || [];
+  
+  if (!conditions.length) {
     console.log('❌ No markup conditions found, returning product as-is');
     return product;
   }
 
   console.log('🔧 Applying markup rules to product:', product.title);
   console.log('🔧 Markup config:', JSON.stringify(markupConfig, null, 2));
+  console.log('🔧 Conditions to check:', conditions.length);
   
   // Check if conditions match based on logic type
   let conditionsMatch = false;
   
   if (markupConfig.conditionsType === 'all') {
     // AND logic - all conditions must match
-    conditionsMatch = markupConfig.conditions.every((condition: any) => checkCondition(product, condition));
+    conditionsMatch = conditions.every((condition: any) => checkCondition(product, condition));
     console.log('🔧 AND Logic: All conditions must match');
   } else {
     // OR logic - any condition can match
-    conditionsMatch = markupConfig.conditions.some((condition: any) => checkCondition(product, condition));
+    conditionsMatch = conditions.some((condition: any) => checkCondition(product, condition));
     console.log('🔧 OR Logic: Any condition can match');
   }
 
   console.log('🔧 Conditions match result:', conditionsMatch);
 
   if (conditionsMatch) {
-    console.log('🔧 Conditions match, applying markup');
+    console.log('🔧 Conditions match, applying priority-based markup');
     
-    // Find the first matching condition and apply its markup only
-    let appliedMarkup = false;
+    // Special logic for overlapping ranges - prioritize specific ranges
+    const currentPrice = parseFloat(product.variants?.[0]?.price || '0');
+    console.log(`🔧 Current price: $${currentPrice}`);
     
-    for (const condition of markupConfig.conditions) {
-      const conditionMatches = checkCondition(product, condition);
-      if (conditionMatches && !appliedMarkup) {
-        const markupType = condition.markupType;
-        const markupValue = parseFloat(condition.markupValue || condition.value || '0');
-        
-        console.log(`🔧 Applying markup from condition: ${condition.field || condition.attribute} ${condition.operator} "${condition.value}" - ${markupType} ${markupValue}`);
-        console.log(`🔧 Raw condition data:`, {
-          markupType: condition.markupType,
-          markupValue: condition.markupValue,
-          value: condition.value,
-          parsedValue: markupValue
-        });
-        
-        const currentPrice = parseFloat(product.variants?.[0]?.price || '0');
-        console.log(`🔧 Current price: $${currentPrice}`);
-        
-        let newPrice = currentPrice;
-        
-        // Apply markup based on type
-        if ((markupType === 'percent' || markupType === 'percentage') && markupValue > 0) {
-          newPrice = currentPrice * (1 + markupValue / 100);
-          console.log(`🔧 Applied ${markupValue}% markup: $${currentPrice} → $${newPrice.toFixed(2)}`);
-        } else if (markupType === 'fixed' && markupValue > 0) {
-          newPrice = currentPrice + markupValue;
-          console.log(`🔧 Applied $${markupValue} fixed markup: $${currentPrice} → $${newPrice.toFixed(2)}`);
-        } else {
-          console.log(`🔧 Markup not applied: type=${markupType}, value=${markupValue}`);
-          continue;
-        }
-        
-        if (newPrice !== currentPrice) {
-          product.variants[0].price = newPrice.toFixed(2);
-          product.markupApplied = true;
-          product.markupType = (markupType === 'percent' || markupType === 'percentage') ? 'percentage' : 'fixed';
-          product.markupValue = markupValue.toString();
-          console.log(`🔧 Final price after markup: $${product.variants[0].price}`);
-          appliedMarkup = true; // Only apply first matching condition
-          break; // Exit after applying first condition
-        }
+    // Sort conditions by specificity (more specific ranges first)
+    const sortedConditions = [...conditions].sort((a, b) => {
+      // Handle both "equals" and "between" operators for range values
+      let aOperator = a.operator;
+      let bOperator = b.operator;
+      let aValue = a.value;
+      let bValue = b.value;
+      
+      // Convert "equals" to "between" if value contains "-"
+      if (a.operator === 'equals' && a.value.includes('-')) {
+        aOperator = 'between';
+        aValue = a.value;
+      }
+      if (b.operator === 'equals' && b.value.includes('-')) {
+        bOperator = 'between';
+        bValue = b.value;
+      }
+      
+      // If both are between operators, sort by range size (smaller range = more specific)
+      if (aOperator === 'between' && bOperator === 'between') {
+        const aRange = aValue.split('-').map(Number);
+        const bRange = bValue.split('-').map(Number);
+        const aSize = aRange[1] - aRange[0];
+        const bSize = bRange[1] - bRange[0];
+        console.log(`🔧 Range comparison: "${aValue}" (size: ${aSize}) vs "${bValue}" (size: ${bSize})`);
+        return aSize - bSize; // Smaller range first (more specific)
+      }
+      return 0;
+    });
+    
+    console.log('🔧 Sorted conditions by specificity:', sortedConditions.map(c => `${c.field} ${c.operator} "${c.value}"`));
+    
+    // Find the first matching condition (most specific first)
+    let appliedCondition = null;
+    for (const condition of sortedConditions) {
+      // Handle case where frontend sends "equals" operator for range values
+      let operatorToUse = condition.operator;
+      let valueToUse = condition.value;
+      
+      // If operator is "equals" but value contains "-", treat it as "between"
+      if (condition.operator === 'equals' && condition.value.includes('-')) {
+        operatorToUse = 'between';
+        valueToUse = condition.value;
+        console.log(`🔧 Converting operator from "equals" to "between" for range value: "${condition.value}"`);
+      }
+      
+      const conditionMatches = checkCondition(product, {
+        ...condition,
+        operator: operatorToUse,
+        value: valueToUse
+      });
+      console.log(`🔧 Checking condition: ${condition.field} ${operatorToUse} "${valueToUse}" - Match: ${conditionMatches}`);
+      
+      if (conditionMatches) {
+        appliedCondition = condition;
+        console.log(`🔧 Found matching condition: ${condition.field} ${operatorToUse} "${valueToUse}"`);
+        break; // Use the first (most specific) matching condition
       }
     }
     
-    if (!appliedMarkup) {
-      console.log('🔧 No valid markup applied - price unchanged');
+    if (appliedCondition) {
+      const markupType = appliedCondition.markupType;
+      const markupValue = parseFloat(appliedCondition.markupValue || '0');
+      
+      console.log(`🔧 Applying markup: ${markupType} ${markupValue}%`);
+      
+      let resultingPrice = currentPrice;
+      
+      // Calculate resulting price
+      if ((markupType === 'percent' || markupType === 'percentage') && markupValue > 0) {
+        resultingPrice = currentPrice * (1 + markupValue / 100);
+        console.log(`🔧 Price calculation: $${currentPrice} → $${resultingPrice.toFixed(2)} (${markupValue}% markup)`);
+      } else if (markupType === 'fixed' && markupValue > 0) {
+        resultingPrice = currentPrice + markupValue;
+        console.log(`🔧 Price calculation: $${currentPrice} → $${resultingPrice.toFixed(2)} ($${markupValue} fixed markup)`);
+      }
+      
+      // Apply the markup to both price and compareAtPrice
+      product.variants[0].price = resultingPrice.toFixed(2);
+      product.variants[0].compareAtPrice = resultingPrice.toFixed(2);
+      product.markupApplied = true;
+      product.markupType = (markupType === 'percent' || markupType === 'percentage') ? 'percentage' : 'fixed';
+      product.markupValue = markupValue.toString();
+      console.log(`🔧 Final price after markup: $${product.variants[0].price}`);
+      console.log(`🔧 Final compareAtPrice after markup: $${product.variants[0].compareAtPrice}`);
+    } else {
+      console.log('🔧 No matching condition found - price unchanged');
     }
   } else {
     console.log('🔧 Conditions do not match, no markup applied');
